@@ -5,6 +5,7 @@
 *.ipr
 
 # Java build and cache directories
+classes
 target/
 build/
 out/

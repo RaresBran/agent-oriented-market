@@ -13,7 +13,7 @@ final class Agent {
     private final Map<String, Integer> failedSellAttempts;
     private final Map<String, Integer> failedBuyAttempts;
     private final Map<String, Integer> inventory;
-    private final Set<String> known = new HashSet<>();
+    private final Map<String, AgentMemory> knownAgentsInfo;
     private int lastInitiationStep = -1;
     private boolean busy;
 
@@ -27,13 +27,24 @@ final class Agent {
         this.buysRemaining = new HashMap<>(buys);
         this.failedSellAttempts = new HashMap<>();
         this.failedBuyAttempts = new HashMap<>();
-        this.inventory = new HashMap<>(sells);
+        this.knownAgentsInfo = new HashMap<>();
+        this.inventory = new HashMap<>();
 
         for (String product : sells.keySet()) {
             failedSellAttempts.put(product, 0);
         }
         for (String product : buys.keySet()) {
             failedBuyAttempts.put(product, 0);
+        }
+    }
+
+    static class AgentMemory {
+        Map<String, Integer> sells;
+        Map<String, Integer> buys;
+
+        AgentMemory(Map<String, Integer> sells, Map<String, Integer> buys) {
+            this.sells = new HashMap<>(sells);
+            this.buys = new HashMap<>(buys);
         }
     }
 
@@ -102,24 +113,59 @@ final class Agent {
 
 
     Optional<Agent> choosePartner(List<Agent> candidates) {
-        List<Agent> unknown = candidates.stream()
-                .filter(a -> !a.id.equals(id) && !known.contains(a.id))
+        List<Agent> possiblePartners = candidates.stream()
+                .filter(a -> !a.id.equals(id) && !a.busy)
+                .toList();
+
+        // 30% chance to choose unknow agent
+        List<Agent> unknown = possiblePartners.stream()
+                .filter(a -> !knownAgentsInfo.containsKey(a.id))
                 .collect(Collectors.toList());
-        List<Agent> knownList = candidates.stream()
-                .filter(a -> !a.id.equals(id) && known.contains(a.id))
-                .collect(Collectors.toList());
-        Agent selected = new Random().nextBoolean() && !unknown.isEmpty()
-                ? pickRandom(unknown)
-                : (!knownList.isEmpty() ? pickRandom(knownList)
-                : (!unknown.isEmpty() ? pickRandom(unknown) : null));
-        if (selected != null) {
-            known.add(selected.id);
-            selected.known.add(id);
+
+        if (!unknown.isEmpty() && Math.random() < 0.3) {
+            Agent chosen = pickRandom(unknown);
+            knownAgentsInfo.put(chosen.id, new AgentMemory(new HashMap<>(), new HashMap<>()));
+            return Optional.of(chosen);
         }
-        return Optional.ofNullable(selected);
+
+        // 70% chance to choose a prioritized agent
+        List<Agent> prioritized = new ArrayList<>();
+
+        for (Agent candidate : possiblePartners) {
+            AgentMemory memory = knownAgentsInfo.get(candidate.id);
+            if (memory == null) continue;
+
+            boolean sellsUseful = memory.sells.keySet().stream()
+                    .anyMatch(p -> buysRemaining.getOrDefault(p, 0) > 0);
+            boolean buysUseful = memory.buys.keySet().stream()
+                    .anyMatch(p -> sellsRemaining.getOrDefault(p, 0) > 0);
+
+            if (sellsUseful || buysUseful) {
+                prioritized.add(candidate);
+            }
+        }
+
+        if (!prioritized.isEmpty()) {
+            return Optional.of(pickRandom(prioritized));
+        }
+
+        // If no other option, choose a random known agent
+        List<Agent> fallback = possiblePartners.stream()
+                .filter(a -> knownAgentsInfo.containsKey(a.id))
+                .collect(Collectors.toList());
+
+        if (!fallback.isEmpty()) {
+            return Optional.of(pickRandom(fallback));
+        }
+
+        return Optional.empty();
     }
 
     public List<String> performTrade(Agent partner, Map<String, Integer> referencePrices) {
+        knownAgentsInfo.put(partner.getId(), new AgentMemory(
+                new HashMap<>(partner.getSellsRemaining()),
+                new HashMap<>(partner.getBuysRemaining())
+        ));
         return performSale(this, partner, referencePrices);
     }
 
