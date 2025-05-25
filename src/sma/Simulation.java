@@ -48,10 +48,8 @@ final class Simulation {
             partner.filter(Agent::canBeContacted).ifPresent(p -> {
                 initiator.markInteracted(step);
                 p.markBusy();
-                List<String> sold = initiator.performTrade(p, prices);
-                List<String> bought = p.performTrade(initiator, prices);
                 records.add(
-                        new InteractionRecord(initiator.getId(), p.getId(), sold, bought)
+                        initiator.interactWith(p, prices)
                 );
             });
         }

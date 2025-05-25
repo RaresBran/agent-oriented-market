@@ -80,6 +80,14 @@ final class Agent {
         return inventory;
     }
 
+    public Map<String, Integer> getFailedSellAttempts() {
+        return failedSellAttempts;
+    }
+
+    public Map<String, Integer> getFailedBuyAttempts() {
+        return failedBuyAttempts;
+    }
+
     void resetForStep() {
         busy = false;
     }
@@ -102,13 +110,13 @@ final class Agent {
     }
 
     public int getDynamicSellPrice(String product, int referencePrice) {
-        int failures = failedSellAttempts.getOrDefault(product, 0);
+        int failures = failedSellAttempts.computeIfAbsent(product, k -> 0);
         return Math.max(1, referencePrice - failures);
     }
 
     public int getDynamicBuyPrice(String product, int referencePrice) {
-        int failures = failedBuyAttempts.getOrDefault(product, 0);
-        return Math.min(cash, referencePrice + failures);
+        int failures = failedBuyAttempts.computeIfAbsent(product, k -> 0);
+        return referencePrice + failures;
     }
 
 
@@ -117,18 +125,18 @@ final class Agent {
                 .filter(a -> !a.id.equals(id) && !a.busy)
                 .toList();
 
-        // 30% chance to choose unknow agent
+        // 40% chance to choose unknow agent
         List<Agent> unknown = possiblePartners.stream()
                 .filter(a -> !knownAgentsInfo.containsKey(a.id))
                 .collect(Collectors.toList());
 
-        if (!unknown.isEmpty() && Math.random() < 0.3) {
+        if (!unknown.isEmpty() && Math.random() < 0.4) {
             Agent chosen = pickRandom(unknown);
             knownAgentsInfo.put(chosen.id, new AgentMemory(new HashMap<>(), new HashMap<>()));
             return Optional.of(chosen);
         }
 
-        // 70% chance to choose a prioritized agent
+        // 60% chance to choose a prioritized agent
         List<Agent> prioritized = new ArrayList<>();
 
         for (Agent candidate : possiblePartners) {
@@ -161,46 +169,104 @@ final class Agent {
         return Optional.empty();
     }
 
-    public List<String> performTrade(Agent partner, Map<String, Integer> referencePrices) {
+    public InteractionRecord interactWith(Agent partner, Map<String, Integer> referencePrices) {
+        // Save info about the partner
         knownAgentsInfo.put(partner.getId(), new AgentMemory(
                 new HashMap<>(partner.getSellsRemaining()),
                 new HashMap<>(partner.getBuysRemaining())
         ));
-        return performSale(this, partner, referencePrices);
+
+        // Initiator sells to partner
+        List<String> sold = performSale(this, partner, referencePrices);
+
+        // Initiator buys from partner
+        List<String> bought = performSale(partner, this, referencePrices);
+
+        return new InteractionRecord(this.getId(), partner.getId(), sold, bought);
     }
 
     private List<String> performSale(Agent seller, Agent buyer, Map<String, Integer> referencePrices) {
         List<String> sold = new ArrayList<>();
+
         for (Map.Entry<String, Integer> entry : seller.getSellsRemaining().entrySet()) {
             String product = entry.getKey();
             int quantity = entry.getValue();
-            int want = buyer.getBuysRemaining().getOrDefault(product, 0);
-            int price = seller.getDynamicSellPrice(product, referencePrices.getOrDefault(product, 0));
-            price = Math.min(price, buyer.getDynamicBuyPrice(product, referencePrices.getOrDefault(product, 0)));
-            int maxAffordable = price > 0 ? buyer.getCash() / price : 0;
-            int tradeQty = Math.min(Math.min(quantity, want), maxAffordable);
+
+            int referencePrice = referencePrices.getOrDefault(product, 0);
+            int sellPrice = seller.getDynamicSellPrice(product, referencePrice);
+            int buyPrice = buyer.getDynamicBuyPrice(product, referencePrice);
+            int agreedPrice = seller == this ? sellPrice : buyPrice;
+
+            if (agreedPrice <= 0) continue;
+
+            TradeType tradeType = determineTradeType(buyer, product, agreedPrice, referencePrice);
+            if (tradeType == TradeType.NONE)
+                continue;
+
+            int tradeQty = computeTradeQuantity(buyer, product, quantity, agreedPrice, tradeType);
             if (tradeQty <= 0) {
-                // Failed attempt
-                seller.failedSellAttempts.merge(product, 1, Integer::sum);
-                buyer.failedBuyAttempts.merge(product, 1, Integer::sum);
+                recordFailedAttempt(seller, buyer, product);
                 continue;
             }
 
-            // Reset failure counters
-            seller.failedSellAttempts.put(product, 0);
-            buyer.failedBuyAttempts.put(product, 0);
-
-            // Execute trade
-            entry.setValue(quantity - tradeQty);
-            buyer.getBuysRemaining().put(product, want - tradeQty);
-            buyer.getInventory().merge(product, tradeQty, Integer::sum);
-            seller.setCash(seller.getCash() + tradeQty * price);
-            buyer.setCash(buyer.getCash() - tradeQty * price);
-            sold.add(tradeQty + " " + product);
+            updateStatesAfterTrade(seller, buyer, product, tradeQty, agreedPrice, tradeType);
+            sold.add(tradeQty + " " + product + (tradeType == TradeType.SPECULATIVE ? " (speculated)" : ""));
         }
+
         return sold;
     }
 
+    private TradeType determineTradeType(Agent buyer, String product, int price, int reference) {
+        // Normal trade if buyer wants this product
+        if (buyer.getBuysRemaining().getOrDefault(product, 0) > 0) {
+            return TradeType.NORMAL;
+        }
+
+        // Speculative trade if the buyer only wants to resell this product
+        // and the price of the product is less than 80% of the reference price
+        if (price <= reference * 0.8
+                && !buyer.getSellsRemaining().containsKey(product)) {
+            return TradeType.SPECULATIVE;
+        }
+
+        // No trade can be made
+        return TradeType.NONE;
+    }
+
+    private int computeTradeQuantity(Agent buyer, String product, int availableQty, int price, TradeType type) {
+        int maxAffordable = buyer.getCash() / price;
+        int desiredQty = switch (type) {
+            case NORMAL -> buyer.getBuysRemaining().get(product);
+            case SPECULATIVE -> maxAffordable;
+            default -> 0;
+        };
+        return Math.min(Math.min(availableQty, desiredQty), maxAffordable);
+    }
+
+    private void recordFailedAttempt(Agent seller, Agent buyer, String product) {
+        seller.getFailedSellAttempts().merge(product, 1, Integer::sum);
+        buyer.getFailedBuyAttempts().merge(product, 1, Integer::sum);
+    }
+
+    private void updateStatesAfterTrade(Agent seller, Agent buyer, String product, int quantity, int price, TradeType type) {
+
+        // Update seller state
+        seller.getFailedSellAttempts().put(product, 0);
+        seller.getSellsRemaining().merge(product, -quantity, Integer::sum);
+        seller.setCash(seller.getCash() + quantity * price);
+
+        // Update buyer state
+        buyer.getFailedBuyAttempts().put(product, 0);
+        buyer.setCash(buyer.getCash() - quantity * price);
+        buyer.getInventory().merge(product, quantity, Integer::sum);
+
+        // Update buyer state based on the trade type that was performed
+        switch (type) {
+            case NORMAL -> buyer.getBuysRemaining().merge(product, -quantity, Integer::sum);
+            case SPECULATIVE -> buyer.getSellsRemaining().merge(product, quantity, Integer::sum);
+        }
+
+    }
 
     private Agent pickRandom(List<Agent> list) {
         return list.get(new Random().nextInt(list.size()));
