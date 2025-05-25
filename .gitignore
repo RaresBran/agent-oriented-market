@@ -1,0 +1,28 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Java build and cache directories
+target/
+build/
+out/
+bin/
+*.class
+*.jar
+*.war
+*.ear
+
+# Maven and Gradle
+.gradle/
+.mvn/
+mvnw*
+gradlew*
+gradle/
+gradlew.bat
+
+# OS and editor temp files
+.DS_Store
+*.swp
+*~
