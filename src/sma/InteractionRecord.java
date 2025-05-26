@@ -31,12 +31,12 @@ final class InteractionRecord {
         }
         if (!sold.isEmpty()) {
             if (hasPrevious) sb.append("; ");
-            sb.append("sells ").append(String.join(", ", sold));
+            sb.append(" sold ").append(String.join(", ", sold));
             hasPrevious = true;
         }
         if (!bought.isEmpty()) {
             if (hasPrevious) sb.append("; ");
-            sb.append("buys ").append(String.join(", ", bought));
+            sb.append(" bought ").append(String.join(", ", bought));
         }
 
         if (sold.isEmpty() && bought.isEmpty() && bartered.isEmpty()) {

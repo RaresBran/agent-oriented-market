@@ -213,7 +213,7 @@ final class TraderAgent extends Agent {
                             this.buysRemaining.merge(theirProduct, -theirQty, Integer::sum);
                             this.inventory.merge(theirProduct, theirQty, Integer::sum);
 
-                            exchanged.add("bartered " + myQty + " " + myProduct +
+                            exchanged.add(myQty + " " + myProduct +
                                     " for " + theirQty + " " + theirProduct);
                             return exchanged;
                         }
