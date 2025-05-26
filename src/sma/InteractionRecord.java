@@ -2,15 +2,15 @@ package sma;
 
 import java.util.List;
 
-final class InteractionRecord {
+final public class InteractionRecord {
     private final String initiatorId;
     private final String partnerId;
     private final List<String> sold;
     private final List<String> bought;
     private final List<String> bartered;
 
-    InteractionRecord(String initiatorId, String partnerId,
-                      List<String> sold, List<String> bought, List<String> bartered) {
+    public InteractionRecord(String initiatorId, String partnerId,
+                             List<String> sold, List<String> bought, List<String> bartered) {
         this.initiatorId = initiatorId;
         this.partnerId = partnerId;
         this.sold = sold;
@@ -31,12 +31,12 @@ final class InteractionRecord {
         }
         if (!sold.isEmpty()) {
             if (hasPrevious) sb.append("; ");
-            sb.append("sells ").append(String.join(", ", sold));
+            sb.append(" sold ").append(String.join(", ", sold));
             hasPrevious = true;
         }
         if (!bought.isEmpty()) {
             if (hasPrevious) sb.append("; ");
-            sb.append("buys ").append(String.join(", ", bought));
+            sb.append(" bought ").append(String.join(", ", bought));
         }
 
         if (sold.isEmpty() && bought.isEmpty() && bartered.isEmpty()) {

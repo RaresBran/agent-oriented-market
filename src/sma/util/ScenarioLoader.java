@@ -1,6 +1,7 @@
-package sma;
+package sma.util;
 
 import org.yaml.snakeyaml.Yaml;
+import sma.Scenario;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -10,10 +11,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-final class ScenarioLoader {
+public final class ScenarioLoader {
 
     @SuppressWarnings("unchecked")
-    static Scenario load(Path yamlPath) throws IOException {
+    public static Scenario load(Path yamlPath) throws IOException {
         try (InputStream in = new FileInputStream(yamlPath.toFile())) {
             Map<String, Object> root = new Yaml().load(in);
             int defaultCash = (Integer) root.get("cash");

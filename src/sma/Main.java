@@ -1,5 +1,7 @@
 package sma;
 
+import sma.util.ScenarioLoader;
+
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.logging.Level;

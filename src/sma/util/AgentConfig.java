@@ -1,4 +1,6 @@
-package sma;
+package sma.util;
+
+import sma.TraderAgent;
 
 import java.util.Collections;
 import java.util.List;
@@ -7,7 +9,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-final class AgentConfig {
+public final class AgentConfig {
     final String type;
     final int count;
     final int entersStep;
@@ -23,7 +25,7 @@ final class AgentConfig {
         this.buys = Map.copyOf(buys);
     }
 
-    static AgentConfig fromMap(Map<String, Object> map) {
+    public static AgentConfig fromMap(Map<String, Object> map) {
         String type = (String) map.get("type");
         int count = (Integer) map.getOrDefault("count", 1);
         int enters = (Integer) map.getOrDefault("enters", 0);
@@ -32,7 +34,7 @@ final class AgentConfig {
         return new AgentConfig(type, count, enters, sells, buys);
     }
 
-    List<TraderAgent> createAgents(int defaultCash) {
+    public List<TraderAgent> createAgents(int defaultCash) {
         return IntStream.rangeClosed(1, count)
                 .mapToObj(i -> new TraderAgent(type + i, type, entersStep, defaultCash, sells, buys))
                 .collect(Collectors.toList());
