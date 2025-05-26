@@ -5,12 +5,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 final class Simulation {
-    private final List<Agent> agents;
+    private final List<TraderAgent> traderAgents;
     private final Map<String, Integer> prices;
 
     public Simulation(Scenario scenario) {
         this.prices = Map.copyOf(scenario.prices());
-        this.agents = scenario.agentConfigs().stream()
+        this.traderAgents = scenario.agentConfigs().stream()
                 .flatMap(cfg -> cfg.createAgents(scenario.defaultCash()).stream())
                 .collect(Collectors.toList());
     }
@@ -20,10 +20,10 @@ final class Simulation {
         int step = 0;
         while (true) {
             final int currentStep = step;
-            List<Agent> present = agents.stream()
+            List<TraderAgent> present = traderAgents.stream()
                     .filter(a -> a.getEntersStep() <= currentStep)
-                    .peek(Agent::resetForStep)
-                    .sorted(Comparator.comparing(Agent::getType).thenComparing(Agent::getId))
+                    .peek(TraderAgent::resetForStep)
+                    .sorted(Comparator.comparing(TraderAgent::getType).thenComparing(TraderAgent::getId))
                     .collect(Collectors.toList());
 
             List<InteractionRecord> records = performStep(present, prices, currentStep);
@@ -34,18 +34,18 @@ final class Simulation {
         }
     }
 
-    private static List<InteractionRecord> performStep(List<Agent> agents, Map<String, Integer> prices, int step) {
-        List<Agent> shuffled = new ArrayList<>(agents);
+    private static List<InteractionRecord> performStep(List<TraderAgent> traderAgents, Map<String, Integer> prices, int step) {
+        List<TraderAgent> shuffled = new ArrayList<>(traderAgents);
         Collections.shuffle(shuffled);
         List<InteractionRecord> records = new ArrayList<>();
 
-        for (Agent initiator : shuffled) {
+        for (TraderAgent initiator : shuffled) {
             if (!initiator.canInitiate(step)) {
                 continue;
             }
 
-            Optional<Agent> partner = initiator.choosePartner(shuffled);
-            partner.filter(Agent::canBeContacted).ifPresent(p -> {
+            Optional<TraderAgent> partner = initiator.choosePartner(shuffled);
+            partner.filter(TraderAgent::canBeContacted).ifPresent(p -> {
                 initiator.markInteracted(step);
                 p.markBusy();
                 records.add(
@@ -56,7 +56,7 @@ final class Simulation {
         return records;
     }
 
-    private void printStep(int step, List<Agent> present, List<InteractionRecord> records) {
+    private void printStep(int step, List<TraderAgent> present, List<InteractionRecord> records) {
         records.forEach(r -> System.out.println(step + ": " + r));
         present.forEach(a -> System.out.println(step + " — " + a.summary()));
         System.out.println();

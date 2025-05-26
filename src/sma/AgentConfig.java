@@ -32,9 +32,9 @@ final class AgentConfig {
         return new AgentConfig(type, count, enters, sells, buys);
     }
 
-    List<Agent> createAgents(int defaultCash) {
+    List<TraderAgent> createAgents(int defaultCash) {
         return IntStream.rangeClosed(1, count)
-                .mapToObj(i -> new Agent(type + i, type, entersStep, defaultCash, sells, buys))
+                .mapToObj(i -> new TraderAgent(type + i, type, entersStep, defaultCash, sells, buys))
                 .collect(Collectors.toList());
     }
 
